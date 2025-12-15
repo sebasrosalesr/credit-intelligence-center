@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    {
+      "source": "/ingestion/:path*",
+      "destination": "https://credit-intelligence-center.fly.dev/ingestion/:path*"
+    }
+  ]
+}
+

@@ -1,4 +1,5 @@
 # api/main.py
+import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -25,9 +26,13 @@ allowed_origins = [
     "http://127.0.0.1:8000",
 ]
 
+extra_origins = [o.strip() for o in os.environ.get("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()]
+allowed_origin_regex = os.environ.get("CORS_ALLOW_ORIGIN_REGEX") or r"^https://.*\.vercel\.app$"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=allowed_origins + extra_origins,
+    allow_origin_regex=allowed_origin_regex,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
