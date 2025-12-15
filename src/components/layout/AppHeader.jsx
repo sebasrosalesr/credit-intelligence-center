@@ -70,7 +70,7 @@ export default function AppHeader({
               TwinMed CIC Platform
             </div>
 
-            <h1 style={{ ...TEXT.displayTitle, margin: 0 }}>Credit Intelligent Center</h1>
+            <h1 style={{ ...TEXT.displayTitle, margin: 0 }}>Credit Intelligence Center</h1>
             <p style={{ margin: 0, ...TEXT.subtitle }}>AI-powered credit processing &amp; operations automation.</p>
           </div>
         </div>
