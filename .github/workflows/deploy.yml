@@ -62,52 +62,13 @@ jobs:
         VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
 
-  build-frontend:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Load environment variables
-      run: |
-        if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-          cp .env.staging .env.production
-        else
-          cp .env.example .env.production
-        fi
-
-    - name: Build
-      run: npm run build
-
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: frontend-build-${{ github.ref_name }}
-        path: dist/
-
   deploy-frontend:
-    needs: build-frontend
+    needs: test
     runs-on: ubuntu-latest
     environment: Production
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
     steps:
     - uses: actions/checkout@v4
-
-    - name: Download build artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: frontend-build-${{ github.ref_name }}
-        path: dist/
 
     - name: Deploy to Vercel
       run: |
@@ -121,9 +82,9 @@ jobs:
         fi
         npm i -g vercel
         if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-          vercel --token "$VERCEL_TOKEN" --yes ./dist
+          vercel --token "$VERCEL_TOKEN" --yes
         else
-          vercel --token "$VERCEL_TOKEN" --prod --yes ./dist
+          vercel --token "$VERCEL_TOKEN" --prod --yes
         fi
       env:
         VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
