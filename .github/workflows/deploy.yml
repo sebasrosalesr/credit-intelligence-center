@@ -110,13 +110,22 @@ jobs:
 
     - name: Deploy to Vercel
       run: |
+        if [ -z "${VERCEL_TOKEN:-}" ]; then
+          echo "Missing VERCEL_TOKEN. Add it in GitHub: Settings → Secrets and variables → Actions."
+          exit 1
+        fi
+        if [ -z "${VERCEL_PROJECT_ID:-}" ] || [ -z "${VERCEL_ORG_ID:-}" ]; then
+          echo "Missing VERCEL_PROJECT_ID or VERCEL_ORG_ID. Add them as GitHub Actions secrets."
+          exit 1
+        fi
         npm i -g vercel
         if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-          vercel --token ${{ secrets.VERCEL_TOKEN }} --yes ./dist
+          vercel --token "$VERCEL_TOKEN" --yes ./dist
         else
-          vercel --token ${{ secrets.VERCEL_TOKEN }} --prod --yes ./dist
+          vercel --token "$VERCEL_TOKEN" --prod --yes ./dist
         fi
       env:
+        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
 
