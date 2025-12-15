@@ -28,13 +28,32 @@ from scripts.alert_utils import (
 
 def run_alert_engine():
     parser = argparse.ArgumentParser(description="Alert engine scorer")
-    parser.add_argument("--dry-run", action="store_true", help="Skip writes to RTDB")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Skip writes to RTDB (default behavior unless --write is set)",
+    )
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Actually write alert fields into RTDB (will create a JSON backup first unless --no-backup)",
+    )
     parser.add_argument("--target", default=None, help="RTDB path to update (default credit_requests)")
     parser.add_argument("--batch-size", type=int, default=None, help="Batch size for RTDB updates (default 300)")
+    parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Disable backup JSON export before writing (not recommended)",
+    )
+    parser.add_argument(
+        "--backup-file",
+        default=None,
+        help="Where to write the pre-write JSON export (default: ./rtdb_backup_<target>_<timestamp>.json)",
+    )
     args = parser.parse_args()
 
     config = load_config()
-    dry_run = args.dry_run or env_bool("ALERT_DRY_RUN", False)
+    dry_run = (not args.write) or args.dry_run or env_bool("ALERT_DRY_RUN", False)
     target_path = args.target or os.environ.get("ALERT_TARGET_PATH", "credit_requests")
     batch_size = args.batch_size or int(os.environ.get("ALERT_BATCH_SIZE", 300))
 
@@ -50,6 +69,14 @@ def run_alert_engine():
 
     ref_root = db.reference(target_path)
     credits = ref_root.get() or {}
+
+    if not dry_run and not args.no_backup:
+        ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        safe_target = target_path.replace("/", "_")
+        backup_path = args.backup_file or f"./rtdb_backup_{safe_target}_{ts}.json"
+        with open(backup_path, "w", encoding="utf-8") as f:
+            json.dump(credits, f, ensure_ascii=False)
+        print(f"✅ Backup written to {backup_path}")
 
     # Rolling context maps (duplicates + customer frequency)
     pair_counts, cust_counts = build_windowed_counts(credits, days_window=config["windows"]["duplicates_days"])
@@ -67,11 +94,15 @@ def run_alert_engine():
     min_score = 101
     processed = 0
     updates: Dict[str, Dict] = {}
+    buffered_records = 0
 
     samples = []
 
     # Per-record flagging
     for rec_id, rec in credits.items():
+        if not isinstance(rec, dict):
+            continue
+
         result = apply_rules(
             rec,
             pair_counts,
@@ -99,7 +130,7 @@ def run_alert_engine():
             }
         )
 
-        updates[rec_id] = {
+        alert_fields = {
             "alert_flags": result["flags"],
             "alert_score": result["score"],
             "alert_label": result["label"],
@@ -107,9 +138,15 @@ def run_alert_engine():
             "alert_last_run": datetime.utcnow().isoformat(),
         }
 
-        if not dry_run and len(updates) >= batch_size:
+        # IMPORTANT: Use multi-location updates so we don't overwrite entire records.
+        for field_key, field_value in alert_fields.items():
+            updates[f"{rec_id}/{field_key}"] = field_value
+
+        buffered_records += 1
+        if not dry_run and buffered_records >= batch_size:
             ref_root.update(updates)
             updates.clear()
+            buffered_records = 0
 
     if not dry_run and updates:
         ref_root.update(updates)
