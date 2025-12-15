@@ -25,6 +25,9 @@ creditapp-*-firebase-adminsdk*.json
 .env.production
 .env.staging
 
+# Python virtual environment
+.venv/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
