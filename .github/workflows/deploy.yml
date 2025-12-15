@@ -1,0 +1,176 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, staging ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run tests
+      run: npm run test:run
+
+    - name: Type check
+      run: npx tsc --noEmit
+
+  preview-deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build preview
+      run: npm run build
+
+    - name: Deploy to Vercel Preview
+      run: |
+        npm i -g vercel
+        vercel --token ${{ secrets.VERCEL_TOKEN }} --yes
+      env:
+        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+
+  build-frontend:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Load environment variables
+      run: |
+        if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
+          cp .env.staging .env.production
+        else
+          cp .env.example .env.production
+        fi
+
+    - name: Build
+      run: npm run build
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-build-${{ github.ref_name }}
+        path: dist/
+
+  deploy-frontend:
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build-${{ github.ref_name }}
+        path: dist/
+
+    - name: Deploy to Vercel
+      run: |
+        npm i -g vercel
+        if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
+          vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod=false
+        else
+          vercel --token ${{ secrets.VERCEL_TOKEN }} --prod --yes
+        fi
+      env:
+        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+
+  deploy-backend:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        cd api
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Deploy to Fly.io
+      run: |
+        curl -L https://fly.io/install.sh | sh
+        export FLYCTL_INSTALL="/home/runner/.fly"
+        export PATH="$FLYCTL_INSTALL/bin:$PATH"
+        cd api
+        if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
+          fly deploy --remote-only --config fly.staging.toml
+        else
+          fly deploy --remote-only
+        fi
+      env:
+        FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  audit-log:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - name: Log deployment
+      run: |
+        echo "Deployment completed at $(date)" >> deployment.log
+        echo "Commit: ${{ github.sha }}" >> deployment.log
+        echo "Triggered by: ${{ github.actor }}" >> deployment.log
+        echo "Environment: production" >> deployment.log

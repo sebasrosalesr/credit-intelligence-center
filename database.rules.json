@@ -1,0 +1,36 @@
+{
+  "rules": {
+    "credit_requests": {
+      ".indexOn": ["Date", "combo_key", "RTN_CR_No"],
+      ".read": "auth != null",
+      "$credit_id": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.token.role == 'owner' || auth.token.role == 'credit' || auth.token.role == 'manager')",
+        ".validate": "newData.hasChildren(['Date', 'Invoice Number', 'Item Number', 'Credit Request Total'])"
+      }
+    },
+    "reminders": {
+      ".indexOn": ["ticket_number", "created_at", "status"],
+      "$reminder_id": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.token.role == 'owner' || auth.token.role == 'credit')",
+        ".validate": "newData.hasChildren(['alert_id', 'ticket_number', 'created_at', 'created_by'])"
+      }
+    },
+    "user_roles": {
+      "$uid": {
+        ".read": "auth != null && (auth.token.role == 'owner' || auth.uid === $uid)",
+        ".write": "auth != null && auth.token.role == 'owner'",
+        ".validate": "newData.hasChild('role')"
+      }
+    },
+    "investigation_notes": {
+      ".indexOn": ["combo_key", "updated_at"],
+      "$note_id": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.token.role == 'owner' || auth.token.role == 'credit' || auth.token.role == 'manager')",
+        ".validate": "newData.hasChildren(['combo_key', 'content', 'updated_at', 'updated_by'])"
+      }
+    }
+  }
+}
