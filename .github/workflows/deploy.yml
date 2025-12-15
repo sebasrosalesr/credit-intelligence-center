@@ -131,16 +131,14 @@ jobs:
 
     - name: Install dependencies
       run: |
-        cd api
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r api/requirements.txt
 
     - name: Deploy to Fly.io
       run: |
         curl -L https://fly.io/install.sh | sh
         export FLYCTL_INSTALL="/home/runner/.fly"
         export PATH="$FLYCTL_INSTALL/bin:$PATH"
-        cd api
         fly deploy --remote-only
       env:
         FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
