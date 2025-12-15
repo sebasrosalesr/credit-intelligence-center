@@ -225,12 +225,6 @@ npm run test:e2e
 
 This project is proprietary software. See LICENSE file for details.
 
-## 🆘 Support
-
-- **Issues**: GitHub Issues
-- **Security**: security@company.com
-- **General**: support@company.com
-
 ## 🚦 Status
 
 [![CI/CD](https://github.com/your-org/credit-intelligence-center/actions/workflows/deploy.yml/badge.svg)](https://github.com/your-org/credit-intelligence-center/actions/workflows/deploy.yml)
