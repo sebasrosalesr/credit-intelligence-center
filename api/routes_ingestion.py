@@ -2,7 +2,7 @@
 
 from typing import Optional, List, Tuple, Set
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import re
@@ -191,7 +191,7 @@ def clean_item_number(val):
 
 @router.post("/requestor-upload")
 @limiter.limit("10/minute")
-async def upload_requestor_file(file: UploadFile = File(...)):
+async def upload_requestor_file(request: Request, file: UploadFile = File(...)):
     """
     Endpoint for normalizing a single requestor template file
     (Macro / DOC / JF / Standard) into the standard schema and
@@ -249,6 +249,7 @@ async def ai_intake_push(payload: PushPayload):
 @router.post("/ai-intake")
 @limiter.limit("5/minute")
 async def ai_intake_engine(
+    request: Request,
     requestor_file: UploadFile = File(...),
     billing_file: UploadFile = File(...),
     mapping_file: Optional[UploadFile] = File(None),
@@ -371,6 +372,7 @@ def _update_credit_request_rest(db_url: str, key: str, payload: dict):
 @router.post("/sync-cr-numbers")
 @limiter.limit("5/minute")
 async def sync_cr_numbers(
+    request: Request,
     billing_file: UploadFile = File(...),
     db_url: str = Form(DEFAULT_FIREBASE_DB_URL),
     cred_json_path: Optional[str] = Form(DEFAULT_SANDBOX_CREDENTIALS_PATH),
@@ -470,6 +472,7 @@ router.include_router(status_router)
 @router.post("/pdf-invoice")
 @limiter.limit("10/minute")
 async def parse_pdf_invoice(
+    request: Request,
     pdf_file: UploadFile = File(...),
     prefer_account_code: bool = Form(True),
     db_url: str = Form(DEFAULT_FIREBASE_DB_URL),

@@ -3,7 +3,7 @@ app = "credit-intelligence-center"
 primary_region = "ord"
 
 [build]
-  source = "api"
+  dockerfile = "api/Dockerfile"
 
 [http_service]
   internal_port = 8080
