@@ -141,11 +141,7 @@ jobs:
         export FLYCTL_INSTALL="/home/runner/.fly"
         export PATH="$FLYCTL_INSTALL/bin:$PATH"
         cd api
-        if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-          fly deploy --remote-only --config fly.staging.toml
-        else
-          fly deploy --remote-only
-        fi
+        fly deploy --remote-only
       env:
         FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
