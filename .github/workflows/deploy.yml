@@ -100,6 +100,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging')
     steps:
+    - uses: actions/checkout@v4
+
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
@@ -110,9 +112,9 @@ jobs:
       run: |
         npm i -g vercel
         if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-          vercel --token ${{ secrets.VERCEL_TOKEN }} --yes --prod=false
+          vercel --token ${{ secrets.VERCEL_TOKEN }} --yes ./dist
         else
-          vercel --token ${{ secrets.VERCEL_TOKEN }} --prod --yes
+          vercel --token ${{ secrets.VERCEL_TOKEN }} --prod --yes ./dist
         fi
       env:
         VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -165,7 +167,7 @@ jobs:
         output: 'trivy-results.sarif'
 
     - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       if: always()
       with:
         sarif_file: 'trivy-results.sarif'
