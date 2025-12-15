@@ -14,6 +14,7 @@ import json
 from urllib import request, error
 from urllib.parse import quote
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import io
 
 from backend.ingestion.service import (
@@ -55,6 +56,11 @@ def _firebase_rest_url(db_url: str, path: str, token: Optional[str] = None) -> s
         sep = "&" if "?" in url else "?"
         url = f"{url}{sep}auth={quote(token, safe='')}"
     return url
+
+
+def _indy_timestamp() -> str:
+    dt = datetime.now(ZoneInfo("America/Indiana/Indianapolis"))
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 # Rate limiting for file uploads and processing
 limiter = Limiter(key_func=get_remote_address)
@@ -475,11 +481,16 @@ async def sync_cr_numbers(
         if dry_run:
             continue
 
+        existing_status = (record.get("Status") or "").strip("\n")
+        status_line = f"[{_indy_timestamp()}] [SYSTEM] Updated by the system."
+        next_status = f"{existing_status}\n{status_line}" if existing_status else status_line
+        patch = {"RTN_CR_No": new_rtn, "Status": next_status}
+
         if fb_ref:
-            fb_ref.child(key).update({"RTN_CR_No": new_rtn})
+            fb_ref.child(key).update(patch)
             updated_count += 1
         else:
-            if _update_credit_request_rest(db_url, key, {"RTN_CR_No": new_rtn}, token):
+            if _update_credit_request_rest(db_url, key, patch, token):
                 updated_count += 1
 
     return {
