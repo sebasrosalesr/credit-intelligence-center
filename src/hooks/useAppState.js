@@ -273,9 +273,16 @@ export function useAppState() {
     dispatch({ type: ACTION_TYPES.SET_REMINDER_DISMISSED, keys });
   }, []);
 
-  const setAlertsFilters = useCallback((filters) => {
-    dispatch({ type: ACTION_TYPES.SET_ALERTS_FILTERS, filters });
-  }, []);
+  const setAlertsFilters = useCallback((filtersOrUpdater) => {
+    const nextFilters =
+      typeof filtersOrUpdater === "function"
+        ? filtersOrUpdater(state.alertsFilters)
+        : filtersOrUpdater;
+    dispatch({
+      type: ACTION_TYPES.SET_ALERTS_FILTERS,
+      filters: nextFilters || state.alertsFilters,
+    });
+  }, [state.alertsFilters]);
 
   return {
     // State
