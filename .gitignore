@@ -13,11 +13,12 @@ dist-ssr
 *.local
 
 # Firebase credentials and secrets
-*.json
-!firebase.json
-!database.rules.json
+.credentials/
 firebase-adminsdk*.json
+*firebase-adminsdk*.json
 creditapp-*-firebase-adminsdk*.json
+serviceAccount*.json
+**/serviceAccount*.json
 
 # Environment variables
 .env
