@@ -6,11 +6,13 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Form, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import re
+import os
 from pydantic import BaseModel, validator
 import pandas as pd
 import numpy as np
 import json
 from urllib import request, error
+from urllib.parse import quote
 from datetime import datetime
 import io
 
@@ -31,9 +33,28 @@ from .config.firebase_env import (
 
 try:
     import firebase_admin
-    from firebase_admin import credentials, initialize_app
+    from firebase_admin import credentials, initialize_app, db
 except ImportError:
     firebase_admin = None
+
+
+def _get_bearer_token(req: Request) -> Optional[str]:
+    auth_header = req.headers.get("authorization") or req.headers.get("Authorization") or ""
+    if not auth_header:
+        return None
+    prefix = "bearer "
+    if auth_header.lower().startswith(prefix):
+        return auth_header[len(prefix):].strip() or None
+    return None
+
+
+def _firebase_rest_url(db_url: str, path: str, token: Optional[str] = None) -> str:
+    base = db_url.rstrip("/")
+    url = f"{base}/{path.lstrip('/')}"
+    if token:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}auth={quote(token, safe='')}"
+    return url
 
 # Rate limiting for file uploads and processing
 limiter = Limiter(key_func=get_remote_address)
@@ -339,26 +360,26 @@ async def ai_intake_engine(
     }
 
 
-def _fetch_credit_requests(db_url: str):
+def _fetch_credit_requests(db_url: str, token: Optional[str] = None):
     """
-    Fetch credit_requests as a dict via REST (unauthenticated). Returns {} on failure.
+    Fetch credit_requests as a dict via REST. Returns {} on failure.
     """
     try:
-        with request.urlopen(f"{db_url.rstrip('/')}/credit_requests.json", timeout=15) as resp:
+        with request.urlopen(_firebase_rest_url(db_url, "credit_requests.json", token), timeout=15) as resp:
             raw = resp.read()
             return json.loads(raw.decode("utf-8")) if raw else {}
     except Exception:
         return {}
 
 
-def _update_credit_request_rest(db_url: str, key: str, payload: dict):
+def _update_credit_request_rest(db_url: str, key: str, payload: dict, token: Optional[str] = None):
     """
-    Update a credit_request record via REST PATCH (unauthenticated).
+    Update a credit_request record via REST PATCH (authenticated when token is provided).
     """
     try:
         data = json.dumps(payload).encode("utf-8")
         req = request.Request(
-          f"{db_url.rstrip('/')}/credit_requests/{key}.json",
+          _firebase_rest_url(db_url, f"credit_requests/{key}.json", token),
           data=data,
           method="PATCH",
           headers={"Content-Type": "application/json"},
@@ -409,9 +430,13 @@ async def sync_cr_numbers(
         for _, row in df_billing.iterrows()
     }
 
-    data = _fetch_credit_requests(db_url)
+    token = _get_bearer_token(request)
+    data = _fetch_credit_requests(db_url, token)
     if not data:
-        raise HTTPException(status_code=400, detail="Failed to fetch credit_requests from Firebase (unauthenticated).")
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to fetch credit_requests from Firebase (check auth + DB rules).",
+        )
 
     fb_ref = None
     if not dry_run:
@@ -454,7 +479,7 @@ async def sync_cr_numbers(
             fb_ref.child(key).update({"RTN_CR_No": new_rtn})
             updated_count += 1
         else:
-            if _update_credit_request_rest(db_url, key, {"RTN_CR_No": new_rtn}):
+            if _update_credit_request_rest(db_url, key, {"RTN_CR_No": new_rtn}, token):
                 updated_count += 1
 
     return {

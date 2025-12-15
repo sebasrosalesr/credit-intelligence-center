@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ref, set, update, push, get, query, orderByChild, equalTo } from "firebase/database";
-import { db } from "../../firebase";
+import { auth, db } from "../../firebase";
 import { useDuplicateChecker } from "../../hooks/useDuplicateChecker";
 import { API_BASE } from "../../config/apiBase";
 import { CREDIT_TYPES, SALES_REPS } from "../../config/constants";
@@ -22,8 +22,14 @@ function getIndyTimestamp() {
   return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
 }
 
+async function getAuthHeaders() {
+  const user = auth.currentUser;
+  if (!user) return {};
+  const token = await user.getIdToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
-function AiIntakeView({ theme }) {
+function AiIntakeView({ theme, currentDbUrl }) {
   const isLight = theme === "light";
   const [requestorFile, setRequestorFile] = useState(null);
   const [billingFile, setBillingFile] = useState(null);
@@ -104,9 +110,11 @@ function AiIntakeView({ theme }) {
 
     setLoading(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`${API_BASE}/ingestion/ai-intake`, {
         method: "POST",
         body: form,
+        headers,
       });
       if (!res.ok) {
         const text = await res.text();
@@ -228,13 +236,15 @@ function AiIntakeView({ theme }) {
     const form = new FormData();
     form.append("pdf_file", pdfFile);
     form.append("prefer_account_code", "true");
-    form.append("db_url", "https://creditapp-tm-default-rtdb.firebaseio.com/");
+    if (currentDbUrl) form.append("db_url", currentDbUrl);
     if (pdfBillingFile) form.append("billing_file", pdfBillingFile);
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`${API_BASE}/ingestion/pdf-invoice`, {
         method: "POST",
         body: form,
+        headers,
       });
       if (!res.ok) {
         const text = await res.text();
@@ -275,10 +285,11 @@ function AiIntakeView({ theme }) {
     const form = new FormData();
     form.append("billing_file", syncFile);
     form.append("dry_run", "false");
-    form.append("db_url", "https://creditapp-tm-default-rtdb.firebaseio.com/");
+    if (currentDbUrl) form.append("db_url", currentDbUrl);
 
     try {
-      const res = await fetch(`${API_BASE}/ingestion/sync-cr-numbers`, { method: "POST", body: form });
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_BASE}/ingestion/sync-cr-numbers`, { method: "POST", body: form, headers });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
