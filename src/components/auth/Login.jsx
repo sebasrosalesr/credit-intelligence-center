@@ -7,6 +7,29 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
+  const formatAuthError = (err) => {
+    const code = err?.code || "";
+    if (code === "auth/invalid-api-key" || code === "auth/invalid-credential") {
+      return "Firebase config looks wrong (invalid API key/credential). Verify Vercel env vars and redeploy.";
+    }
+    if (code === "auth/unauthorized-domain") {
+      return "This domain is not authorized in Firebase. Add your Vercel domain to Firebase Auth → Settings → Authorized domains.";
+    }
+    if (code === "auth/user-not-found" || code === "auth/wrong-password") {
+      return "Invalid email or password.";
+    }
+    if (code === "auth/operation-not-allowed") {
+      return "Email/Password sign-in is disabled in Firebase. Enable it in Firebase Auth → Sign-in method.";
+    }
+    if (code === "auth/too-many-requests") {
+      return "Too many attempts. Wait a bit and try again.";
+    }
+    if (String(err?.message || "").includes("auth argument must be")) {
+      return "Firebase Auth is not initialized. Check Vercel env vars (VITE_FIREBASE_*) and redeploy.";
+    }
+    return `Login failed${code ? ` (${code})` : ""}. Check the browser console for details.`;
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
@@ -16,7 +39,7 @@ export default function Login({ onLogin }) {
       onLogin?.(result.user);
     } catch (err) {
       console.error("Login failed:", err);
-      setError("Invalid email or password");
+      setError(formatAuthError(err));
     }
   };
 
