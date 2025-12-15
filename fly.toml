@@ -1,8 +1,9 @@
-# fly.staging.toml (STAGING)
-app = "credit-intelligence-center-staging"
+# fly.toml (PROD)
+app = "credit-intelligence-center"
 primary_region = "ord"
 
 [build]
+  source = "api"
 
 [http_service]
   internal_port = 8080
