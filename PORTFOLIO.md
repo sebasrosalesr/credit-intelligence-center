@@ -281,10 +281,10 @@ I'm a **Principal-level Full-Stack Engineer** who solves expensive business prob
 
 Interested in similar transformational results for your organization?
 
-- **Email:** your.email@example.com
-- **LinkedIn:** [linkedin.com/in/yourprofile](https://linkedin.com/in/yourprofile)
+- **Email:** srosales.pro@gmail.com
+- **LinkedIn:** (https://www.linkedin.com/in/sebastian-rosales-3a83a851/)
 - **Portfolio:** [yourportfolio.dev](https://yourportfolio.dev)
-- **GitHub:** [@yourusername](https://github.com/yourusername)
+- **GitHub:** (https://github.com/sebasrosalesr)
 
 ### Open to:
 - Principal Engineer / Staff Engineer roles ($200K+)
