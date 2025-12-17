@@ -743,7 +743,12 @@ export default function DetailDrawer({
         >
           <div
             className="cic-modal-panel"
-            style={reminderPanelStyle}
+            style={{
+              ...reminderPanelStyle,
+              width: "min(900px, 96vw)",
+              maxWidth: "96vw",
+              maxHeight: "92vh",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={reminderPanelAccent} />
