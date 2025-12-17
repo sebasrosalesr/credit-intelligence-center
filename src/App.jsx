@@ -2086,7 +2086,7 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
             {activeTab === "ic" && (
               <TabErrorBoundary tabName="Credit Aging Hub">
                 <AlertsFollowUpsTab
-                  alerts={combinedAlerts || []}
+                  alerts={filteredAlerts || []}
                   filters={alertsFilters}
                   defaultFilters={defaultAlertsFilters}
                   onFiltersChange={setAlertsFilters}
