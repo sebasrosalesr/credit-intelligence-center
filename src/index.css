@@ -371,6 +371,18 @@ a {
   font-size: 0.8rem;
   color: #f7f7ff;
   margin: 0 0 2px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.inv-text * {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.inv-text pre,
+.inv-text code {
+  white-space: pre-wrap;
 }
 
 .inv-meta {
