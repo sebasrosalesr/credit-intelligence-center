@@ -78,6 +78,9 @@ function appStateReducer(state, action) {
       return { ...state, editMode: !state.editMode };
 
     case ACTION_TYPES.SET_PENDING_EDITS:
+      if (typeof action.value === "function") {
+        return { ...state, pendingEdits: action.value(state.pendingEdits) };
+      }
       return { ...state, pendingEdits: { ...state.pendingEdits, [action.key]: action.value } };
 
     case ACTION_TYPES.CLEAR_PENDING_EDITS:
@@ -87,11 +90,23 @@ function appStateReducer(state, action) {
       return { ...state, editUpsert: action.value };
 
     case ACTION_TYPES.SET_EDIT_PUSH_STATE:
-      return { ...state, editPushState: action.value };
+      return {
+        ...state,
+        editPushState:
+          typeof action.value === "function"
+            ? action.value(state.editPushState)
+            : action.value,
+      };
 
     // Delete actions
     case ACTION_TYPES.SET_DELETE_STATE:
-      return { ...state, deleteState: action.value };
+      return {
+        ...state,
+        deleteState:
+          typeof action.value === "function"
+            ? action.value(state.deleteState)
+            : action.value,
+      };
 
     // Selection actions
     case ACTION_TYPES.TOGGLE_ROW_SELECTION: {
@@ -125,7 +140,13 @@ function appStateReducer(state, action) {
       return { ...state, csvPushFile: action.file };
 
     case ACTION_TYPES.SET_CSV_PUSH_STATE:
-      return { ...state, csvPushState: action.value };
+      return {
+        ...state,
+        csvPushState:
+          typeof action.value === "function"
+            ? action.value(state.csvPushState)
+            : action.value,
+      };
 
     case ACTION_TYPES.SET_CSV_PREVIEW:
       return { ...state, csvPreview: action.value };
@@ -188,8 +209,12 @@ export function useAppState() {
     dispatch({ type: ACTION_TYPES.TOGGLE_EDIT_MODE });
   }, []);
 
-  const setPendingEdits = useCallback((key, value) => {
-    dispatch({ type: ACTION_TYPES.SET_PENDING_EDITS, key, value });
+  const setPendingEdits = useCallback((keyOrUpdater, value) => {
+    if (typeof keyOrUpdater === "function") {
+      dispatch({ type: ACTION_TYPES.SET_PENDING_EDITS, key: null, value: keyOrUpdater });
+      return;
+    }
+    dispatch({ type: ACTION_TYPES.SET_PENDING_EDITS, key: keyOrUpdater, value });
   }, []);
 
   const clearPendingEdits = useCallback(() => {

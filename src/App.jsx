@@ -694,7 +694,7 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
         })
       );
 
-      setSelectedRowKeys(new Set());
+      clearSelection();
       setDeleteState({
         loading: false,
         message: `Deleted ${recordsToDelete.length} row(s).`,
@@ -1337,7 +1337,7 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
       ...prev,
       [key]: { ...(prev[key] || {}), [field]: value },
     }));
-  }, []);
+  }, [setPendingEdits]);
 
   // ======================
   // Summary metrics
