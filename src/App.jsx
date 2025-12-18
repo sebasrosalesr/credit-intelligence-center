@@ -368,6 +368,20 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
       })
       .filter(Boolean);
 
+    const isMissing = (v) => {
+      if (v == null) return true;
+      const s = String(v).trim();
+      return !s || s.toLowerCase() === "nan";
+    };
+
+    const getIngestionMissingFields = (row) => {
+      const missing = [];
+      if (isMissing(row["Invoice Number"])) missing.push("Invoice Number");
+      if (isMissing(row["Item Number"])) missing.push("Item Number");
+      if (isMissing(row["Credit Type"])) missing.push("Credit Type");
+      return missing;
+    };
+
     if (!entries.length) {
       setEditPushState({ loading: false, message: "", error: "No pending edits to push." });
       setTimeout(
@@ -420,14 +434,43 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
       let backendDetails = "";
       if (!db) {
         // No Firebase available (e.g. mock mode) => backend is required.
+        const backendRows = entries
+          .map(({ __firebase_duplicate, ...rest }) => {
+            void __firebase_duplicate;
+            return rest;
+          })
+          .filter((row) => getIngestionMissingFields(row).length === 0);
+
+        const skippedCount = entries.length - backendRows.length;
+        if (skippedCount) {
+          const fields = new Set();
+          entries.forEach((row) => getIngestionMissingFields(row).forEach((f) => fields.add(f)));
+          backendDetails = `Backend ingestion skipped for ${skippedCount} row(s) missing: ${Array.from(fields).join(", ")}`;
+        }
+
+        if (!backendRows.length) {
+          setEditPushState({
+            loading: false,
+            message: `${db ? `Firebase updated (${entries.length})` : "Push completed"} · ${backendDetails || "Backend ingestion skipped: 0 valid rows"}`,
+            error: "",
+          });
+          clearPendingEdits();
+          clearSelection();
+          setTimeout(
+            () =>
+              setEditPushState((prev) =>
+                prev.loading ? prev : { loading: false, message: "", error: "" }
+              ),
+            4000
+          );
+          return;
+        }
+
         const res = await fetch(`${API_BASE}/ingestion/ai-intake/push`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            rows: entries.map(({ __firebase_duplicate, ...rest }) => {
-              void __firebase_duplicate;
-              return rest;
-            }),
+            rows: backendRows,
             mode: editUpsert ? "upsert" : "insert",
             upsert: editUpsert,
             db_url: currentDbUrl,
@@ -442,14 +485,45 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
       } else {
         // Best-effort backend ingestion: don't block Firebase updates on validation errors.
         try {
+          const backendRows = entries
+            .map(({ __firebase_duplicate, ...rest }) => {
+              void __firebase_duplicate;
+              return rest;
+            })
+            .filter((row) => getIngestionMissingFields(row).length === 0);
+
+          const skippedCount = entries.length - backendRows.length;
+          if (skippedCount) {
+            const fields = new Set();
+            entries.forEach((row) => getIngestionMissingFields(row).forEach((f) => fields.add(f)));
+            backendDetails = `Backend ingestion skipped for ${skippedCount} row(s) missing: ${Array.from(fields).join(", ")}`;
+          }
+
+          if (!backendRows.length) {
+            // Nothing valid to send; keep any skip summary we already built.
+            backendDetails = backendDetails || "Backend ingestion skipped: 0 valid rows";
+            setEditPushState({
+              loading: false,
+              message: `${db ? `Firebase updated (${entries.length})` : "Push completed"} · ${backendDetails}`,
+              error: "",
+            });
+            clearPendingEdits();
+            clearSelection();
+            setTimeout(
+              () =>
+                setEditPushState((prev) =>
+                  prev.loading ? prev : { loading: false, message: "", error: "" }
+                ),
+              4000
+            );
+            return;
+          }
+
           const res = await fetch(`${API_BASE}/ingestion/ai-intake/push`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              rows: entries.map(({ __firebase_duplicate, ...rest }) => {
-                void __firebase_duplicate;
-                return rest;
-              }),
+              rows: backendRows,
               mode: editUpsert ? "upsert" : "insert",
               upsert: editUpsert,
               db_url: currentDbUrl,
@@ -457,13 +531,13 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
           });
           if (res.ok) {
             const data = await res.json();
-            backendDetails = data.details ? data.details.join(" | ") : "";
+            const detailMsg = data.details ? data.details.join(" | ") : "";
+            backendDetails = [backendDetails, detailMsg].filter(Boolean).join(" · ");
           } else {
-            const text = await res.text();
-            backendDetails = `Backend ingestion skipped: HTTP ${res.status}${text ? ` (${text})` : ""}`;
+            backendDetails = [backendDetails, `Backend ingestion failed: HTTP ${res.status}`].filter(Boolean).join(" · ");
           }
         } catch (err) {
-          backendDetails = `Backend ingestion skipped: ${err?.message || "request failed"}`;
+          backendDetails = [backendDetails, `Backend ingestion failed: ${err?.message || "request failed"}`].filter(Boolean).join(" · ");
         }
       }
 
@@ -490,6 +564,31 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
       });
     }
   };
+
+  const pendingEditIngestionSkips = useMemo(() => {
+    const fields = new Set();
+    let count = 0;
+    sortedCredits.forEach((rec, idx) => {
+      const key = getRecordKey(rec, idx);
+      const edits = pendingEdits[key];
+      if (!edits) return;
+      const merged = { ...rec, ...edits };
+      const missing = [];
+      const isMissing = (v) => {
+        if (v == null) return true;
+        const s = String(v).trim();
+        return !s || s.toLowerCase() === "nan";
+      };
+      if (isMissing(merged["Invoice Number"])) missing.push("Invoice Number");
+      if (isMissing(merged["Item Number"])) missing.push("Item Number");
+      if (isMissing(merged["Credit Type"])) missing.push("Credit Type");
+      if (missing.length) {
+        count += 1;
+        missing.forEach((f) => fields.add(f));
+      }
+    });
+    return { count, fields: Array.from(fields) };
+  }, [sortedCredits, pendingEdits, getRecordKey]);
 
   const parseCsv = (text) => {
     const lines = text.trim().split(/\r?\n/);
@@ -833,13 +932,52 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
       }
 
       let backendDetails = "";
+      const isMissing = (v) => {
+        if (v == null) return true;
+        const s = String(v).trim();
+        return !s || s.toLowerCase() === "nan";
+      };
+      const getIngestionMissingFields = (row) => {
+        const missing = [];
+        if (isMissing(row["Invoice Number"])) missing.push("Invoice Number");
+        if (isMissing(row["Item Number"])) missing.push("Item Number");
+        if (isMissing(row["Credit Type"])) missing.push("Credit Type");
+        return missing;
+      };
+      const backendRows = rowsWithKeys.filter((row) => getIngestionMissingFields(row).length === 0);
+      const skippedCount = rowsWithKeys.length - backendRows.length;
+      if (skippedCount) {
+        const fields = new Set();
+        rowsWithKeys.forEach((row) => getIngestionMissingFields(row).forEach((f) => fields.add(f)));
+        backendDetails = `Backend ingestion skipped for ${skippedCount} row(s) missing: ${Array.from(fields).join(", ")}`;
+      }
+
+      if (!backendRows.length) {
+        backendDetails = backendDetails || "Backend ingestion skipped: 0 valid rows";
+        setCsvPushState({
+          loading: false,
+          message: `${db ? `Firebase updated (${rowsWithKeys.length})` : "CSV push completed"} · ${backendDetails}`,
+          error: "",
+        });
+        setCsvFile(null);
+        setCsvPreview({ parsed: false, rows: [], issues: [], summary: null });
+        setTimeout(
+          () =>
+            setCsvPushState((prev) =>
+              prev.loading ? prev : { loading: false, message: "", error: "" }
+            ),
+          4000
+        );
+        return;
+      }
+
       if (!db) {
         // No Firebase available (e.g. mock mode) => backend is required.
         const res = await fetch(`${API_BASE}/ingestion/ai-intake/push`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            rows: rowsWithKeys,
+            rows: backendRows,
             mode: useUpsert ? "upsert" : "insert",
             upsert: useUpsert,
             db_url: currentDbUrl,
@@ -850,14 +988,15 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
           throw new Error(`HTTP ${res.status}: ${textRes || "Push failed"}`);
         }
         const data = await res.json();
-        backendDetails = (useUpsert ? "[Upsert] " : "[Insert] ") + (data.details ? data.details.join(" | ") : "CSV push completed");
+        const detailMsg = (useUpsert ? "[Upsert] " : "[Insert] ") + (data.details ? data.details.join(" | ") : "CSV push completed");
+        backendDetails = [backendDetails, detailMsg].filter(Boolean).join(" · ");
       } else {
         try {
           const res = await fetch(`${API_BASE}/ingestion/ai-intake/push`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              rows: rowsWithKeys,
+              rows: backendRows,
               mode: useUpsert ? "upsert" : "insert",
               upsert: useUpsert,
               db_url: currentDbUrl,
@@ -865,13 +1004,13 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
           });
           if (res.ok) {
             const data = await res.json();
-            backendDetails = (useUpsert ? "[Upsert] " : "[Insert] ") + (data.details ? data.details.join(" | ") : "CSV push completed");
+            const detailMsg = (useUpsert ? "[Upsert] " : "[Insert] ") + (data.details ? data.details.join(" | ") : "CSV push completed");
+            backendDetails = [backendDetails, detailMsg].filter(Boolean).join(" · ");
           } else {
-            const textRes = await res.text();
-            backendDetails = `Backend ingestion skipped: HTTP ${res.status}${textRes ? ` (${textRes})` : ""}`;
+            backendDetails = [backendDetails, `Backend ingestion failed: HTTP ${res.status}`].filter(Boolean).join(" · ");
           }
         } catch (err) {
-          backendDetails = `Backend ingestion skipped: ${err?.message || "request failed"}`;
+          backendDetails = [backendDetails, `Backend ingestion failed: ${err?.message || "request failed"}`].filter(Boolean).join(" · ");
         }
       }
 
@@ -2139,6 +2278,7 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
                   creditTypeOptions={CREDIT_TYPES}
                   onRowClick={(rec) => setSelectedRecord(rec)}
                   canEditRecords={canEditRecords}
+                  ingestionSkipSummary={pendingEditIngestionSkips}
                 />
               </TabErrorBoundary>
             )}

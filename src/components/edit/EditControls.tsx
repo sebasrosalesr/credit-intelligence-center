@@ -24,6 +24,7 @@ export interface EditControlsProps {
   hasCsvReady: boolean;
   onUnifiedPush: () => void;
   canEditRecords: boolean;
+  ingestionSkipSummary?: { count: number; fields: string[] };
 }
 
 const EditControls = memo<EditControlsProps>(function EditControls({
@@ -42,6 +43,7 @@ const EditControls = memo<EditControlsProps>(function EditControls({
   hasCsvReady,
   onUnifiedPush,
   canEditRecords,
+  ingestionSkipSummary,
 }) {
   if (!canEditRecords) {
     return (
@@ -150,6 +152,23 @@ const EditControls = memo<EditControlsProps>(function EditControls({
           </button>
         </div>
       </div>
+
+      {editMode && (ingestionSkipSummary?.count ?? 0) > 0 && (
+        <div
+          style={{
+            marginTop: "0.6rem",
+            padding: "0.5rem 0.75rem",
+            borderRadius: "0.55rem",
+            border: "1px solid rgba(251,191,36,0.25)",
+            background: "rgba(251,191,36,0.08)",
+            color: "rgba(251,191,36,0.95)",
+            fontSize: "0.85rem",
+          }}
+        >
+          Backend ingestion will skip {ingestionSkipSummary.count} edited row(s) missing:{" "}
+          {(ingestionSkipSummary.fields || []).join(", ") || "required fields"}.
+        </div>
+      )}
 
       {(editPushState.message || editPushState.error) && (
         <div

@@ -36,6 +36,7 @@ function EditRecordsTab({
   canEditRecords = false,
   deleteState,
   csvPushState,
+  ingestionSkipSummary,
 
   // CSV preview
   csvPushFile,
@@ -153,6 +154,7 @@ function EditRecordsTab({
         hasCsvReady={hasCsvReady}
         onUnifiedPush={onUnifiedPush}
         canEditRecords={canEditRecords}
+        ingestionSkipSummary={ingestionSkipSummary}
       />
       <CsvUploadSection
         csvPushFile={csvPushFile}
