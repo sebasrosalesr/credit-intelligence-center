@@ -382,38 +382,23 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
 
     setEditPushState({ loading: true, message: "", error: "" });
     try {
-      const res = await fetch(`${API_BASE}/ingestion/ai-intake/push`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rows: entries.map(({ __firebase_duplicate, ...rest }) => {
-            void __firebase_duplicate;
-            return rest;
-          }),
-          mode: editUpsert ? "upsert" : "insert",
-          upsert: editUpsert,
-          db_url: currentDbUrl,
-        }),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`HTTP ${res.status}: ${text || "Push failed"}`);
-      }
-      const data = await res.json();
-
-      // Client-side fallback upsert to RTDB so edits appear immediately
+      // Always push directly to Firebase (source of truth for the UI) when available,
+      // even if the backend ingestion endpoint rejects a row for schema validation.
       if (db) {
-        for (const entry of entries) {
-          const { id: entryId, combo_key, ...rest } = entry;
-          const payload = { ...rest };
-          // ensure combo_key is stored for future upserts
-          if (combo_key) payload.combo_key = combo_key;
+        await Promise.all(
+          entries.map(async (entry) => {
+            const { id: entryId, combo_key, ...rest } = entry;
+            const payload = { ...rest };
+            if (combo_key) payload.combo_key = combo_key;
 
-          if (entryId) {
-            await update(ref(db, `credit_requests/${entryId}`), payload).catch((err) =>
-              console.error("RTDB update failed (id):", err)
-            );
-          } else if (combo_key) {
+            if (entryId) {
+              await update(ref(db, `credit_requests/${entryId}`), payload).catch((err) =>
+                console.error("RTDB update failed (id):", err)
+              );
+              return;
+            }
+            if (!combo_key) return;
+
             try {
               const snap = await get(
                 query(ref(db, "credit_requests"), orderByChild("combo_key"), equalTo(combo_key))
@@ -428,13 +413,63 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
             } catch (err) {
               console.error("RTDB upsert via combo_key failed:", err);
             }
+          })
+        );
+      }
+
+      let backendDetails = "";
+      if (!db) {
+        // No Firebase available (e.g. mock mode) => backend is required.
+        const res = await fetch(`${API_BASE}/ingestion/ai-intake/push`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rows: entries.map(({ __firebase_duplicate, ...rest }) => {
+              void __firebase_duplicate;
+              return rest;
+            }),
+            mode: editUpsert ? "upsert" : "insert",
+            upsert: editUpsert,
+            db_url: currentDbUrl,
+          }),
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`HTTP ${res.status}: ${text || "Push failed"}`);
+        }
+        const data = await res.json();
+        backendDetails = data.details ? data.details.join(" | ") : "";
+      } else {
+        // Best-effort backend ingestion: don't block Firebase updates on validation errors.
+        try {
+          const res = await fetch(`${API_BASE}/ingestion/ai-intake/push`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              rows: entries.map(({ __firebase_duplicate, ...rest }) => {
+                void __firebase_duplicate;
+                return rest;
+              }),
+              mode: editUpsert ? "upsert" : "insert",
+              upsert: editUpsert,
+              db_url: currentDbUrl,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            backendDetails = data.details ? data.details.join(" | ") : "";
+          } else {
+            const text = await res.text();
+            backendDetails = `Backend ingestion skipped: HTTP ${res.status}${text ? ` (${text})` : ""}`;
           }
+        } catch (err) {
+          backendDetails = `Backend ingestion skipped: ${err?.message || "request failed"}`;
         }
       }
 
       setEditPushState({
         loading: false,
-        message: data.details ? data.details.join(" | ") : "Push completed",
+        message: `${db ? `Firebase updated (${entries.length})` : "Push completed"}${backendDetails ? ` · ${backendDetails}` : ""}`,
         error: "",
       });
       // clear local pending edits after success
@@ -754,24 +789,8 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
     const useUpsert = editUpsert || hasKeys;
 
     try {
-      const res = await fetch(`${API_BASE}/ingestion/ai-intake/push`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rows: rowsWithKeys,
-          mode: useUpsert ? "upsert" : "insert",
-          upsert: useUpsert,
-          db_url: currentDbUrl,
-        }),
-      });
-      if (!res.ok) {
-        const textRes = await res.text();
-        throw new Error(`HTTP ${res.status}: ${textRes || "Push failed"}`);
-      }
-      const data = await res.json();
-
-      // client-side upsert fallback for CSV rows (id or combo_key or Invoice+Item)
       if (db) {
+        // Push directly to Firebase first; backend ingestion is best-effort.
         // Build lookup maps once to avoid repeated RTDB reads
         let comboMap = new Map();
         let invItemMap = new Map();
@@ -813,11 +832,52 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
         }
       }
 
+      let backendDetails = "";
+      if (!db) {
+        // No Firebase available (e.g. mock mode) => backend is required.
+        const res = await fetch(`${API_BASE}/ingestion/ai-intake/push`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rows: rowsWithKeys,
+            mode: useUpsert ? "upsert" : "insert",
+            upsert: useUpsert,
+            db_url: currentDbUrl,
+          }),
+        });
+        if (!res.ok) {
+          const textRes = await res.text();
+          throw new Error(`HTTP ${res.status}: ${textRes || "Push failed"}`);
+        }
+        const data = await res.json();
+        backendDetails = (useUpsert ? "[Upsert] " : "[Insert] ") + (data.details ? data.details.join(" | ") : "CSV push completed");
+      } else {
+        try {
+          const res = await fetch(`${API_BASE}/ingestion/ai-intake/push`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              rows: rowsWithKeys,
+              mode: useUpsert ? "upsert" : "insert",
+              upsert: useUpsert,
+              db_url: currentDbUrl,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            backendDetails = (useUpsert ? "[Upsert] " : "[Insert] ") + (data.details ? data.details.join(" | ") : "CSV push completed");
+          } else {
+            const textRes = await res.text();
+            backendDetails = `Backend ingestion skipped: HTTP ${res.status}${textRes ? ` (${textRes})` : ""}`;
+          }
+        } catch (err) {
+          backendDetails = `Backend ingestion skipped: ${err?.message || "request failed"}`;
+        }
+      }
+
       setCsvPushState({
         loading: false,
-        message:
-          (useUpsert ? "[Upsert] " : "[Insert] ") +
-          (data.details ? data.details.join(" | ") : "CSV push completed"),
+        message: `${db ? `Firebase updated (${rowsWithKeys.length})` : "CSV push completed"}${backendDetails ? ` · ${backendDetails}` : ""}`,
         error: "",
       });
       setCsvFile(null);
