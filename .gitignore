@@ -36,6 +36,10 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Local data exports / misc
+rtdb_backup_credit_requests_*.json
+vercel 2.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

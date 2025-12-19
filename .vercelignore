@@ -1,0 +1,14 @@
+# Exclude backend/API code and large local artifacts from Vercel deployments.
+api/
+backend/
+functions/
+
+# Local scripts / data exports (not needed in the deployed frontend).
+test_csv_validation.py
+rtdb_backup_credit_requests_*.json
+vercel 2.json
+
+# Python envs
+.venv/
+venv/
+env/
