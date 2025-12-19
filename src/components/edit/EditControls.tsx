@@ -45,6 +45,8 @@ const EditControls = memo<EditControlsProps>(function EditControls({
   canEditRecords,
   ingestionSkipSummary,
 }) {
+  const skipSummary = ingestionSkipSummary;
+
   if (!canEditRecords) {
     return (
       <section className="panel panel-muted" style={{ marginBottom: "1rem" }}>
@@ -153,7 +155,7 @@ const EditControls = memo<EditControlsProps>(function EditControls({
         </div>
       </div>
 
-      {editMode && (ingestionSkipSummary?.count ?? 0) > 0 && (
+      {editMode && skipSummary && skipSummary.count > 0 && (
         <div
           style={{
             marginTop: "0.6rem",
@@ -165,8 +167,8 @@ const EditControls = memo<EditControlsProps>(function EditControls({
             fontSize: "0.85rem",
           }}
         >
-          Backend ingestion will skip {ingestionSkipSummary.count} edited row(s) missing:{" "}
-          {(ingestionSkipSummary.fields || []).join(", ") || "required fields"}.
+          Backend ingestion will skip {skipSummary.count} edited row(s) missing:{" "}
+          {(skipSummary.fields || []).join(", ") || "required fields"}.
         </div>
       )}
 
