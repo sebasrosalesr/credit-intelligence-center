@@ -1776,41 +1776,106 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
     const rows = sortedCredits;
     if (!rows.length) return;
 
-    const headers = [
-      "id",
-      "combo_key",
-      "Date",
-      "Customer Number",
-      "Invoice Number",
-      "Item Number",
-      "QTY",
-      "Credit Type",
-      "Ticket Number",
-      "RTN_CR_No",
-      "Sales Rep",
-      "Credit Request Total",
+    const columns = [
+      {
+        label: "id",
+        value: (rec) => rec.id || "",
+      },
+      {
+        label: "combo_key",
+        value: (rec) =>
+          rec.combo_key ||
+          (rec["Invoice Number"] && rec["Item Number"]
+            ? `${rec["Invoice Number"]}|${rec["Item Number"]}`
+            : ""),
+      },
+      {
+        label: "Date",
+        value: (rec) => rec.Date || "",
+      },
+      {
+        label: "Status",
+        value: (rec) => {
+          const state = getWorkflowState(rec);
+          const detail = extractLatestStatusLabel(rec.Status, { maxLength: 0 });
+          return detail ? `${state} - ${detail}` : state;
+        },
+      },
+      {
+        label: "Customer Number",
+        value: (rec) => rec["Customer Number"] || "",
+      },
+      {
+        label: "Invoice Number",
+        value: (rec) => rec["Invoice Number"] || "",
+      },
+      {
+        label: "Item Number",
+        value: (rec) => rec["Item Number"] || "",
+      },
+      {
+        label: "QTY",
+        value: (rec) => rec.QTY || "",
+      },
+      {
+        label: "Unit Price",
+        value: (rec) => toNumber(rec["Unit Price"]),
+      },
+      {
+        label: "Corrected Unit Price",
+        value: (rec) => toNumber(rec["Corrected Unit Price"]),
+      },
+      {
+        label: "Credit Type",
+        value: (rec) => rec["Credit Type"] || "",
+      },
+      {
+        label: "Credit Request Total",
+        value: (rec) => toNumber(rec["Credit Request Total"]),
+      },
+      {
+        label: "Issue Type",
+        value: (rec) => rec["Issue Type"] || "",
+      },
+      {
+        label: "Reason for Credit",
+        value: (rec) => rec["Reason for Credit"] || "",
+      },
+      {
+        label: "Requested By",
+        value: (rec) => rec["Requested By"] || "",
+      },
+      {
+        label: "EDI Service Provider",
+        value: (rec) => rec["EDI Service Provider"] || "",
+      },
+      {
+        label: "Ticket Number",
+        value: (rec) => rec["Ticket Number"] || "",
+      },
+      {
+        label: "RTN_CR_No",
+        value: (rec) => rec.RTN_CR_No || "",
+      },
+      {
+        label: "Type",
+        value: (rec) => rec.Type || "",
+      },
+      {
+        label: "Sales Rep",
+        value: (rec) => rec["Sales Rep"] || "",
+      },
     ];
 
+    const headers = columns.map((col) => col.label);
     const csvLines = [headers.join(",")];
 
     for (const rec of rows) {
-      const line = [
-        rec.id || "",
-        rec.combo_key || (rec["Invoice Number"] && rec["Item Number"] ? `${rec["Invoice Number"]}|${rec["Item Number"]}` : ""),
-        rec.Date || "",
-        rec["Customer Number"] || "",
-        rec["Invoice Number"] || "",
-        rec["Item Number"] || "",
-        rec.QTY || "",
-        rec["Credit Type"] || "",
-        rec["Ticket Number"] || "",
-        rec.RTN_CR_No || "",
-        rec["Sales Rep"] || "",
-        toNumber(rec["Credit Request Total"]),
-      ]
+      const line = columns
+        .map((col) => col.value(rec))
         .map((val) => {
           const s = String(val ?? "");
-          if (s.includes(",") || s.includes('"')) {
+          if (s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r")) {
             return `"${s.replace(/"/g, '""')}"`;
           }
           return s;

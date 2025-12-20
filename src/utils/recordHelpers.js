@@ -6,7 +6,7 @@ export function getWorkflowState(rec) {
   return "Completed";
 }
 
-export function extractLatestStatusLabel(raw) {
+export function extractLatestStatusLabel(raw, { maxLength = 60 } = {}) {
   if (!raw) return "";
 
   const str = String(raw);
@@ -22,7 +22,10 @@ export function extractLatestStatusLabel(raw) {
     line = str.trim();
   }
 
-  if (line.length > 60) return line.slice(0, 57) + "…";
+  if (maxLength && line.length > maxLength) {
+    const sliceAt = Math.max(0, maxLength - 3);
+    return line.slice(0, sliceAt) + "…";
+  }
   return line;
 }
 
