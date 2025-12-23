@@ -311,6 +311,7 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
     bulk: "",
     action: "all",
     slaBucket: "all",
+    preset: "none",
   };
 
 
@@ -1441,11 +1442,16 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
 
   // Filter combined alerts for display
   const filteredAlerts = useMemo(() => {
-    const { search, bulk } = alertsFilters;
+    const { search, bulk, preset } = alertsFilters;
     const term = search.trim().toLowerCase();
     const bulkSet = parseBulkList(bulk);
 
     return combinedAlerts.filter((rec) => {
+      if (preset === "latest_billing_sync") {
+        const status = String(rec.Status || "");
+        if (!status.includes("[SYSTEM]")) return false;
+      }
+
       if (term) {
         const haystack = [
           rec["Invoice Number"],

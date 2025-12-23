@@ -1,5 +1,5 @@
 // src/components/tabs/AlertsFollowUpsTab.jsx
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ref, push } from "firebase/database";
 import SlaPill from "../common/SlaPill.jsx";
 import RepsVsCreditTotal from "../charts/RepsVsCreditTotal.jsx";
@@ -11,7 +11,7 @@ import {
   reminderPanelGlow,
   reminderGhostIconButton,
 } from "../modalStyles.js";
-import { getStrictReminderTicketKey } from "../../utils/recordHelpers";
+import { getStrictReminderTicketKey, parseStatusTimeline } from "../../utils/recordHelpers";
 
 /**
  * Credit Aging Hub tab (alerts/follow-ups).
@@ -39,7 +39,14 @@ function AlertsFollowUpsTab({
   const isMixedMode = hasReminderRecords && hasCreditRecords;
   const [visibleCount, setVisibleCount] = useState(50);
   const [sortDir, setSortDir] = useState("asc"); // asc = oldest first, desc = newest first
+  const preset = filters?.preset || "none";
+  const isSystemPreset = preset === "latest_billing_sync";
 
+  useEffect(() => {
+    if (isSystemPreset) {
+      setSortDir("desc");
+    }
+  }, [isSystemPreset]);
 
   const generateReminderKey = useCallback(() => {
     if (dbInstance) {
@@ -74,17 +81,34 @@ function AlertsFollowUpsTab({
   );
 
   const sortedAlerts = useMemo(() => {
+    const getSystemUpdateMs = (rec) => {
+      const timeline = parseStatusTimeline(rec?.Status);
+      if (!timeline.length) return -Infinity;
+      const systemEntries = timeline.filter((entry) => (entry.label || "").includes("[SYSTEM]"));
+      if (!systemEntries.length) return -Infinity;
+      const latest = systemEntries[systemEntries.length - 1];
+      const ts = latest?.timestamp;
+      if (!ts) return -Infinity;
+      const parsed = new Date(ts.replace(" ", "T")).getTime();
+      return Number.isNaN(parsed) ? -Infinity : parsed;
+    };
+
     const toMs = (rec) => {
+      if (isSystemPreset) {
+        const systemMs = getSystemUpdateMs(rec);
+        if (systemMs !== -Infinity) return systemMs;
+      }
       const t = new Date(rec.Date || "").getTime();
       return Number.isNaN(t) ? -Infinity : t;
     };
     const copy = [...alerts];
     copy.sort((a, b) => {
       const diff = toMs(a) - toMs(b);
-      return sortDir === "desc" ? -diff : diff;
+      const effectiveDir = isSystemPreset ? "desc" : sortDir;
+      return effectiveDir === "desc" ? -diff : diff;
     });
     return copy;
-  }, [alerts, sortDir]);
+  }, [alerts, sortDir, isSystemPreset]);
 
   const matchesAction = useCallback(
     (actionState) => {
@@ -225,7 +249,7 @@ function AlertsFollowUpsTab({
             </p>
             <div style={{ ...textStyles.smallMuted }}>
               {alerts.length.toLocaleString()} items (reminders + credits) · Sorted{" "}
-              {sortDir === "desc" ? "newest → oldest" : "oldest → newest"}.
+              {(isSystemPreset ? "newest → oldest (system updates)" : sortDir === "desc" ? "newest → oldest" : "oldest → newest")}.
             </div>
           </div>
           <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
@@ -233,6 +257,7 @@ function AlertsFollowUpsTab({
               type="button"
               onClick={() => setSortDir((prev) => (prev === "asc" ? "desc" : "asc"))}
               style={icPillButtonStyle}
+              disabled={isSystemPreset}
             >
               Sort by date: {sortDir === "desc" ? "Newest -> Oldest" : "Oldest -> Newest"}
             </button>
@@ -304,6 +329,15 @@ function AlertsFollowUpsTab({
 
       <section className="panel panel-muted" style={{ padding: "1rem", marginBottom: "1rem" }}>
         <div className="filters-row" style={{ gap: "0.75rem", flexWrap: "wrap" }}>
+          <select
+            value={preset}
+            onChange={(e) => onFiltersChange((prev) => ({ ...prev, preset: e.target.value }))}
+            className="select"
+            style={{ minWidth: 220 }}
+          >
+            <option value="none">Preset: None</option>
+            <option value="latest_billing_sync">Preset: Latest Billing Sync</option>
+          </select>
           <input
             type="text"
             value={filters.search}

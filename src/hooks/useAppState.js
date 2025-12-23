@@ -31,6 +31,7 @@ const initialState = {
     bulk: "",
     action: "all",
     slaBucket: "all",
+    preset: "none",
   },
 };
 
