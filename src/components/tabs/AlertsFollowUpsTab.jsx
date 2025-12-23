@@ -251,6 +251,11 @@ function AlertsFollowUpsTab({
               {alerts.length.toLocaleString()} items (reminders + credits) · Sorted{" "}
               {(isSystemPreset ? "newest → oldest (system updates)" : sortDir === "desc" ? "newest → oldest" : "oldest → newest")}.
             </div>
+            {isSystemPreset && (
+              <div style={{ ...textStyles.smallMuted, marginTop: 4 }}>
+                Latest Billing Sync preset includes completed + older records beyond 90 days.
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
             <button
