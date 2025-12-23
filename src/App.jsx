@@ -1398,6 +1398,7 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
 
   // Alerts view: last 90 days without RTN/CR number, sorted oldest -> newest
   const alertsFollowUps = useMemo(() => {
+    const isLatestBillingPreset = alertsFilters?.preset === "latest_billing_sync";
     const now = Date.now();
     const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
     const cutoff = now - ninetyDaysMs;
@@ -1410,11 +1411,11 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
       const d = new Date(rawDate);
       const t = d.getTime();
       if (Number.isNaN(t)) continue;
-      if (t < cutoff) continue; // only last 90 days
+      if (!isLatestBillingPreset && t < cutoff) continue; // only last 90 days
 
       const hasRTN =
         rec.RTN_CR_No && rec.RTN_CR_No !== "nan" && rec.RTN_CR_No !== "";
-      if (hasRTN) continue;
+      if (!isLatestBillingPreset && hasRTN) continue;
 
       // Add reminder data if available
       const ticketKey = getStrictReminderTicketKey(rec);
@@ -1433,7 +1434,7 @@ function AuthenticatedApp({ userRole, authUser, onLogout }) {
       void __ts;
       return rest;
     });
-  }, [baseCredits, remindersMapByKey, reminderKeyByTicket]);
+  }, [baseCredits, remindersMapByKey, reminderKeyByTicket, alertsFilters]);
 
   // Combine reminders and credit alerts for display
   const combinedAlerts = useMemo(() => {
