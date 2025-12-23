@@ -203,6 +203,7 @@ def clean_item_number(val):
     Normalize Item Number:
     - Strip whitespace
     - Convert floats like 1004360.0 -> '1004360'
+    - Normalize case to uppercase for consistent matching
     - Always return as string
     """
     s = str(val).strip()
@@ -213,7 +214,7 @@ def clean_item_number(val):
                 s = str(int(f))
         except ValueError:
             pass
-    return s
+    return s.upper()
 
 
 @router.post("/requestor-upload")
